@@ -47,8 +47,8 @@ pip install pypyodbc
 
 ```python
 dbConfig = {
-    'Driver': 'Your-server-name',
-    'Server': 'Your-driver-name'
+    'Driver': 'Your-driver-name',
+    'Server': 'Your-server-name'
     }
 ```
 
