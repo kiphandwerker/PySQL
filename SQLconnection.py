@@ -1,146 +1,192 @@
-# db_viewer.py
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import pypyodbc as pyo
-from dbConfig import *
+import dbConfig
 
+# --- CONFIG ---
 
-class DatabaseHandler:
-    def __init__(self, config):
+SERVER_NAME = dbConfig.dbConfig['Server']
+DRIVER = dbConfig.dbConfig['Driver']
+
+# --- APP ---
+
+class SQLExplorer:
+    def __init__(self, server):
+        self.server = server
+        self.connection = None
+        self.cursor = None
+        self.current_db = None
+        self.current_table = None
+
+    def connect_to_server(self):
         try:
-            self.connection = pyo.connect(**config)
+            self.connection = pyo.connect(
+                Driver=DRIVER,
+                Server=self.server,
+                Trusted_Connection='yes'
+            )
             self.cursor = self.connection.cursor()
-            self.table = config['Table']
-            print(f"[INFO] Connected to database: {self.table}")
         except Exception as e:
-            messagebox.showerror("Database Connection Error", str(e))
-            raise
+            raise ConnectionError(f"Cannot connect to SQL Server: {e}")
 
-    def get_columns(self):
-        query = f"""
-        SELECT COLUMN_NAME 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = N'{self.table}'
-        """
+    def get_databases(self):
+        self.cursor.execute("SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')")
+        return [row[0] for row in self.cursor.fetchall()]
+
+    def get_tables(self, db_name):
+        self.cursor.execute(f"USE [{db_name}]")
+        self.current_db = db_name
+        self.cursor.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'")
+        return [row[0] for row in self.cursor.fetchall()]
+
+    def get_columns(self, table_name):
+        self.cursor.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ?", [table_name])
+        return [row[0] for row in self.cursor.fetchall()]
+
+    def fetch_table_data(self, table_name):
+        self.current_table = table_name
+        query = f"SELECT * FROM [{table_name}]"
         self.cursor.execute(query)
-        return [col[0] for col in self.cursor.fetchall()]
+        return self.cursor.fetchall()
 
-    def fetch_all(self):
-        try:
-            query = f"SELECT * FROM {self.table}"
-            self.cursor.execute(query)
-            return self.cursor.fetchall()
-        except Exception as e:
-            messagebox.showerror("Query Error", str(e))
-            return []
+    def run_query(self, query):
+        self.cursor.execute(query)
+        if query.strip().lower().startswith("select"):
+            result = self.cursor.fetchall()
+            columns = [desc[0] for desc in self.cursor.description]
+            return result, columns
+        else:
+            self.connection.commit()
+            return [], []
 
+# --- GUI APP ---
 
-class App:
-    def __init__(self, root, db_handler):
+class ExplorerApp:
+    def __init__(self, root, explorer: SQLExplorer):
         self.root = root
-        self.db = db_handler
-        self.columns = self.db.get_columns()
-
-        self.root.title("📊 Database Viewer")
-        self.root.geometry("950x700")
-        self.root.configure(bg="#f0f4f7")
-        self.root.resizable(False, False)
+        self.explorer = explorer
 
         self.status_var = tk.StringVar()
-        self._setup_styles()
-        self._build_layout()
-        self._bind_shortcuts()
+        self.databases = []
+        self.tables = []
+        self.columns = []
 
-    def _setup_styles(self):
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("Treeview.Heading", font=('Helvetica', 11, 'bold'), background="#2c3e50", foreground="white")
-        style.configure("Treeview", font=('Helvetica', 10), rowheight=24, background="white", fieldbackground="white")
+        self._setup_gui()
+        self._bind_events()
 
-    def _build_layout(self):
-        # Title
-        ttk.Label(self.root, text="📁 Database Table Viewer", font=("Helvetica", 16, "bold"),
-                  background="#f0f4f7", foreground="#2c3e50").grid(row=0, column=0, columnspan=8, pady=10)
+    def _setup_gui(self):
+        self.root.title("🗂️ SQL Explorer")
+        self.root.geometry("1000x750")
+        self.root.configure(bg="#f0f4f7")
 
-        # Treeview
-        self.tree = ttk.Treeview(self.root, columns=self.columns, show="headings", height=14)
-        for col in self.columns:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=130, anchor="center")
-        self.tree.grid(row=1, column=0, columnspan=7, padx=10, pady=10, sticky="nsew")
+        # --- Top Controls ---
+        control_frame = ttk.Frame(self.root)
+        control_frame.grid(row=0, column=0, columnspan=8, padx=10, pady=5, sticky="w")
 
-        scroll = ttk.Scrollbar(self.root, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scroll.set)
-        scroll.grid(row=1, column=7, sticky="ns")
+        ttk.Label(control_frame, text="Select Database:").grid(row=0, column=0, padx=5)
+        self.db_box = ttk.Combobox(control_frame, width=30, state="readonly")
+        self.db_box.grid(row=0, column=1, padx=5)
 
-        # View All Button
-        ttk.Button(self.root, text="🔍 View All Records", command=self.view_records).grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        ttk.Label(control_frame, text="Select Table:").grid(row=0, column=2, padx=5)
+        self.table_box = ttk.Combobox(control_frame, width=30, state="readonly")
+        self.table_box.grid(row=0, column=3, padx=5)
 
-        # SQL Editor Label
-        ttk.Label(self.root, text="🧠 Custom SQL Query:", background="#f0f4f7", font=("Helvetica", 11, "bold")).grid(row=3, column=0, columnspan=8, padx=10, sticky="w")
+        ttk.Button(control_frame, text="🔄 Load Table", command=self.load_table_data).grid(row=0, column=4, padx=10)
 
-        # SQL Editor
-        self.query_text = scrolledtext.ScrolledText(self.root, width=115, height=5, font=("Courier New", 10))
+        # --- Status Label ---
+        self.status_label = ttk.Label(self.root, textvariable=self.status_var, background="#f0f4f7",
+                                      font=("Helvetica", 10, "italic"))
+        self.status_label.grid(row=1, column=0, columnspan=8, padx=10, sticky="w")
+        self.status_var.set("Select a database and table.")
+
+        # --- Treeview ---
+        self.tree = ttk.Treeview(self.root, columns=[], show="headings", height=20)
+        self.tree.grid(row=2, column=0, columnspan=7, padx=10, pady=10, sticky="nsew")
+
+        self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=self.scrollbar.set)
+        self.scrollbar.grid(row=2, column=7, sticky="ns")
+
+        # --- SQL Query Section ---
+        ttk.Label(self.root, text="🧠 Custom SQL Query:", background="#f0f4f7",
+                  font=("Helvetica", 11, "bold")).grid(row=3, column=0, columnspan=8, padx=10, sticky="w")
+
+        self.query_text = scrolledtext.ScrolledText(self.root, width=120, height=5, font=("Courier New", 10))
         self.query_text.grid(row=4, column=0, columnspan=8, padx=10, pady=5)
 
-        # Execute Button
         ttk.Button(self.root, text="▶️ Run Query", command=self.run_custom_query).grid(row=5, column=0, padx=10, pady=5, sticky="w")
 
-        # Status Bar
-        ttk.Label(self.root, textvariable=self.status_var, background="#f0f4f7", anchor="w",
-                  font=("Helvetica", 9)).grid(row=6, column=0, columnspan=8, sticky="we", padx=10, pady=5)
-        self.status_var.set("Ready. Press Ctrl+R to refresh.")
+    def _bind_events(self):
+        self.db_box.bind("<<ComboboxSelected>>", self.load_tables_for_db)
 
-    def _bind_shortcuts(self):
-        self.root.bind("<Control-r>", lambda event: self.view_records())
+    def load_databases(self):
+        try:
+            self.explorer.connect_to_server()
+            self.databases = self.explorer.get_databases()
+            self.db_box['values'] = self.databases
+            self.status_var.set(f"Found {len(self.databases)} databases.")
+        except Exception as e:
+            messagebox.showerror("Connection Error", str(e))
 
-    def view_records(self):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        records = self.db.fetch_all()
-        self._populate_tree(records, self.columns)
-        self.status_var.set(f"Loaded {len(records)} records from {self.db.table}.")
+    def load_tables_for_db(self, event=None):
+        db_name = self.db_box.get()
+        if not db_name:
+            return
+        try:
+            self.tables = self.explorer.get_tables(db_name)
+            self.table_box['values'] = self.tables
+            self.status_var.set(f"Selected DB: {db_name} — {len(self.tables)} tables found.")
+        except Exception as e:
+            messagebox.showerror("Table Load Error", str(e))
+
+    def load_table_data(self):
+        table = self.table_box.get()
+        if not table:
+            messagebox.showwarning("No Table", "Please select a table first.")
+            return
+        try:
+            self.columns = self.explorer.get_columns(table)
+            records = self.explorer.fetch_table_data(table)
+            self._populate_tree(records, self.columns)
+            self.status_var.set(f"Viewing: {self.explorer.current_db}.{table} — {len(records)} rows")
+        except Exception as e:
+            messagebox.showerror("Data Load Error", str(e))
 
     def run_custom_query(self):
         query = self.query_text.get("1.0", tk.END).strip()
         if not query:
-            messagebox.showwarning("Empty Query", "Please enter a SQL query.")
             return
-
         try:
-            self.db.cursor.execute(query)
-            if query.lower().startswith("select"):
-                records = self.db.cursor.fetchall()
-                columns = [desc[0] for desc in self.db.cursor.description]
+            records, columns = self.explorer.run_query(query)
+            if records and columns:
                 self._populate_tree(records, columns)
-                self.status_var.set(f"Query executed successfully. {len(records)} rows returned.")
+                self.status_var.set(f"Query returned {len(records)} rows.")
             else:
-                self.db.connection.commit()
                 self.status_var.set("Query executed successfully.")
-                messagebox.showinfo("Success", "Query executed successfully.")
+                messagebox.showinfo("Success", "Query executed.")
         except Exception as e:
-            messagebox.showerror("Query Error", str(e))
-            self.status_var.set("Error executing query.")
+            messagebox.showerror("SQL Error", str(e))
+            self.status_var.set("Error running query.")
 
     def _populate_tree(self, records, columns):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+        for row in self.tree.get_children():
+            self.tree.delete(row)
         self.tree.config(columns=columns)
         for col in columns:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=130, anchor="center")
+            self.tree.column(col, width=130)
         for row in records:
             self.tree.insert("", "end", values=row)
 
 
+# --- MAIN ---
 def main():
     root = tk.Tk()
-    try:
-        db_handler = DatabaseHandler(dbConfig)
-        app = App(root, db_handler)
-        root.mainloop()
-    except Exception as e:
-        print(f"Application failed to start: {e}")
+    explorer = SQLExplorer(SERVER_NAME)
+    app = ExplorerApp(root, explorer)
+    app.load_databases()
+    root.mainloop()
+
 
 if __name__ == "__main__":
     main()
