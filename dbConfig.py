@@ -1,4 +1,4 @@
 dbConfig = {
-    'Driver': 'Your-driver-name',
-    'Server': 'Your-server-name'
+    'Driver': 'SQL Server',
+    'Server': 'D230844'
     }
