@@ -1,14 +1,13 @@
+# Imports
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import pypyodbc as pyo
 import dbConfig
-
-# --- CONFIG ---
+import re
 
 SERVER_NAME = dbConfig.dbConfig['Server']
 DRIVER = dbConfig.dbConfig['Driver']
 
-# --- APP ---
 
 class SQLExplorer:
     def __init__(self, server):
@@ -59,8 +58,6 @@ class SQLExplorer:
             self.connection.commit()
             return [], []
 
-# --- GUI APP ---
-
 class ExplorerApp:
     def __init__(self, root, explorer: SQLExplorer):
         self.root = root
@@ -79,7 +76,6 @@ class ExplorerApp:
         self.root.geometry("1000x750")
         self.root.configure(bg="#f0f4f7")
 
-        # --- Top Controls ---
         control_frame = ttk.Frame(self.root)
         control_frame.grid(row=0, column=0, columnspan=8, padx=10, pady=5, sticky="w")
 
@@ -93,13 +89,12 @@ class ExplorerApp:
 
         ttk.Button(control_frame, text="🔄 Load Table", command=self.load_table_data).grid(row=0, column=4, padx=10)
 
-        # --- Status Label ---
         self.status_label = ttk.Label(self.root, textvariable=self.status_var, background="#f0f4f7",
                                       font=("Helvetica", 10, "italic"))
         self.status_label.grid(row=1, column=0, columnspan=8, padx=10, sticky="w")
         self.status_var.set("Select a database and table.")
 
-        # --- Treeview ---
+        # Tree
         self.tree = ttk.Treeview(self.root, columns=[], show="headings", height=20)
         self.tree.grid(row=2, column=0, columnspan=7, padx=10, pady=10, sticky="nsew")
 
@@ -107,7 +102,7 @@ class ExplorerApp:
         self.tree.configure(yscrollcommand=self.scrollbar.set)
         self.scrollbar.grid(row=2, column=7, sticky="ns")
 
-        # --- SQL Query Section ---
+        # DQL selection
         ttk.Label(self.root, text="🧠 Custom SQL Query:", background="#f0f4f7",
                   font=("Helvetica", 11, "bold")).grid(row=3, column=0, columnspan=8, padx=10, sticky="w")
 
@@ -120,7 +115,7 @@ class ExplorerApp:
         self.theme_box = ttk.Combobox(control_frame, width=15, state="readonly")
         self.theme_box.grid(row=0, column=6, padx=5)
 
-        # Load available ttk themes
+        # ttk themes
         self.style = ttk.Style()
         available_themes = self.style.theme_names()
         self.theme_box['values'] = available_themes
@@ -129,6 +124,7 @@ class ExplorerApp:
     def _bind_events(self):
         self.db_box.bind("<<ComboboxSelected>>", self.load_tables_for_db)
         self.theme_box.bind("<<ComboboxSelected>>", self.change_theme)
+        self.query_text.bind("<KeyRelease>", self._highlight_syntax)
 
     def load_databases(self):
         try:
@@ -196,6 +192,49 @@ class ExplorerApp:
             self.status_var.set(f"Theme changed to: {selected_theme}")
         except Exception as e:
             messagebox.showerror("Theme Error", f"Could not apply theme: {e}")
+
+    def _highlight_syntax(self, event=None):
+        # Clear previous tags
+        for tag in self.query_text.tag_names():
+            self.query_text.tag_remove(tag, "1.0", tk.END)
+
+        sql_keywords = r"\b(SELECT|FROM|WHERE|AND|OR|INSERT|INTO|VALUES|UPDATE|SET|DELETE|JOIN|ON|AS|CREATE|TABLE|DROP|ALTER|USE|INNER|LEFT|RIGHT|FULL|GROUP BY|ORDER BY|HAVING|DISTINCT|TOP|LIMIT|OFFSET|IS|NULL|NOT|IN|EXISTS)\b"
+        strings = r"('[^']*'|\"[^\"]*\")"
+        numbers = r"\b\d+(\.\d+)?\b"
+        comments = r"--.*?$"
+
+        content = self.query_text.get("1.0", tk.END)
+        
+        # Define tags
+        self.query_text.tag_config("keyword", foreground="#569CD6", font=("Courier New", 10, "bold"))
+        self.query_text.tag_config("string", foreground="#CE9178")
+        self.query_text.tag_config("number", foreground="#B5CEA8")
+        self.query_text.tag_config("comment", foreground="#6A9955", font=("Courier New", 10, "italic"))
+
+        # Apply keyword tag
+        for match in re.finditer(sql_keywords, content, re.IGNORECASE):
+            start, end = match.span()
+            self._apply_tag("keyword", start, end)
+
+        # Apply string tag
+        for match in re.finditer(strings, content):
+            start, end = match.span()
+            self._apply_tag("string", start, end)
+
+        # Apply number tag
+        for match in re.finditer(numbers, content):
+            start, end = match.span()
+            self._apply_tag("number", start, end)
+
+        # Apply comment tag
+        for match in re.finditer(comments, content, re.MULTILINE):
+            start, end = match.span()
+            self._apply_tag("comment", start, end)
+
+    def _apply_tag(self, tag, start_idx, end_idx):
+        start = f"1.0 + {start_idx} chars"
+        end = f"1.0 + {end_idx} chars"
+        self.query_text.tag_add(tag, start, end)
     
 
 
