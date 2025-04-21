@@ -36,7 +36,7 @@ A simple yet powerful GUI application that lets you explore and query Microsoft 
 <li> Clone the repo:
 
 ```bash
-   git clone https://github.com/your-username/sql-viewer.git
+   git clone https://github.com/kiphandwerker/PySQL.git
 ```
 
 <li> Install dependencies:
@@ -81,5 +81,7 @@ The Treeview will display the results of your selected table or SQL query.
 - Add support for SQL Server Authentication (username/password)
 
 - Export query results to CSV or Excel
+
+- Add syntax highlights for common functions
 
 - Dark mode theme toggle
