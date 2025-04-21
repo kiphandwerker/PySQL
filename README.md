@@ -17,7 +17,9 @@ A simple yet powerful GUI application that lets you explore and query Microsoft 
 - 🗃️ Browse and select **tables** within a selected database
 - 👁️ View all table contents in a responsive Treeview
 - 🧠 Run **custom SQL queries** and view results dynamically
+    - SQL syntax highlighting in the query editor
 - 📝 Clean, user-friendly interface built with Tkinter
+    - Change themes based on default ttk options
 
 ---
 
@@ -47,15 +49,9 @@ pip install pypyodbc
 
 ```python
 dbConfig = {
-    'Driver': 'Your-driver-name',
+    'Driver': 'SQL Server',
     'Server': 'Your-server-name'
     }
-```
-
-<li>Run the app:
-
-```python
-python SQLconnection.py
 ```
 
 </ol>
@@ -65,6 +61,10 @@ python SQLconnection.py
 <ol>
 
 <li>Launch the app
+
+```python
+py SQLconnection.py
+```
 
 <li>Choose a database from the dropdown
 
@@ -82,8 +82,4 @@ The Treeview will display the results of your selected table or SQL query.
 
 - Export query results to CSV or Excel
 
-- Add syntax highlighting to the query editor
-
 - Dark mode theme toggle
-
-- Other theme options
