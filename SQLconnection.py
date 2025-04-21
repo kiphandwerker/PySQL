@@ -116,8 +116,19 @@ class ExplorerApp:
 
         ttk.Button(self.root, text="▶️ Run Query", command=self.run_custom_query).grid(row=5, column=0, padx=10, pady=5, sticky="w")
 
+        ttk.Label(control_frame, text="Theme:").grid(row=0, column=5, padx=5)
+        self.theme_box = ttk.Combobox(control_frame, width=15, state="readonly")
+        self.theme_box.grid(row=0, column=6, padx=5)
+
+        # Load available ttk themes
+        self.style = ttk.Style()
+        available_themes = self.style.theme_names()
+        self.theme_box['values'] = available_themes
+        self.theme_box.set(self.style.theme_use())  # default theme
+
     def _bind_events(self):
         self.db_box.bind("<<ComboboxSelected>>", self.load_tables_for_db)
+        self.theme_box.bind("<<ComboboxSelected>>", self.change_theme)
 
     def load_databases(self):
         try:
@@ -177,6 +188,15 @@ class ExplorerApp:
             self.tree.column(col, width=130)
         for row in records:
             self.tree.insert("", "end", values=row)
+            
+    def change_theme(self, event=None):
+        selected_theme = self.theme_box.get()
+        try:
+            self.style.theme_use(selected_theme)
+            self.status_var.set(f"Theme changed to: {selected_theme}")
+        except Exception as e:
+            messagebox.showerror("Theme Error", f"Could not apply theme: {e}")
+    
 
 
 # --- MAIN ---
