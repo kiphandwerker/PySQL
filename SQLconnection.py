@@ -104,10 +104,11 @@ class ExplorerApp:
 
         # DQL selection
         ttk.Label(self.root, text="🧠 Custom SQL Query:", background="#f0f4f7",
-                  font=("Helvetica", 11, "bold")).grid(row=3, column=0, columnspan=8, padx=10, sticky="w")
+                font=("Helvetica", 11, "bold")).grid(row=3, column=0, columnspan=8, padx=10, sticky="w")
 
+        # Text area for SQL query
         self.query_text = scrolledtext.ScrolledText(self.root, width=120, height=5, font=("Courier New", 10))
-        self.query_text.grid(row=4, column=0, columnspan=8, padx=10, pady=5)
+        self.query_text.grid(row=4, column=0, columnspan=8, padx=10, pady=5, sticky="w")
 
         ttk.Button(self.root, text="▶️ Run Query", command=self.run_custom_query).grid(row=5, column=0, padx=10, pady=5, sticky="w")
 
