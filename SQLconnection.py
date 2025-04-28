@@ -109,6 +109,7 @@ class ExplorerApp:
         # Text area for SQL query
         self.query_text = scrolledtext.ScrolledText(self.root, width=120, height=5, font=("Courier New", 10))
         self.query_text.grid(row=4, column=0, columnspan=8, padx=10, pady=5, sticky="w")
+        self.query_text.insert(tk.END, "SELECT -variable-, COUNT(*)\nFROM -df-\nGROUP BY -variable-")
 
         ttk.Button(self.root, text="▶️ Run Query", command=self.run_custom_query).grid(row=5, column=0, padx=10, pady=5, sticky="w")
 
